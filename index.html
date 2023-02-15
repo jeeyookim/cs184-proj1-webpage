@@ -1,0 +1,224 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>
+  body {
+    padding: 100px;
+    width: 1000px;
+    margin: auto;
+    text-align: left;
+    font-weight: 300;
+    font-family: 'Open Sans', sans-serif;
+    color: #121212;
+  }
+  h1, h2, h3, h4 {
+    font-family: 'Source Sans Pro', sans-serif;
+  }
+</style>
+<title>CS 184 Rasterizer</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link href="https://fonts.googleapis.com/css?family=Open+Sans|Source+Sans+Pro" rel="stylesheet">
+</head>
+
+
+<body>
+
+<h1 align="middle">CS 184: Computer Graphics and Imaging, Spring 2023</h1>
+<h1 align="middle">Project 1: Rasterizer</h1>
+<h2 align="middle">Jeeyoo Kim, CS184</h2>
+
+<br><br>
+
+<div>
+
+<h2 align="middle">Overview</h2>
+<p>The first step is to rasterize the triangles, which means converting them into individual pixels. Get the range of the pixels that may lie inside the triangle and calculate the position and color of each pixel based on the triangle's vertices. This was improved in part 2 by implementing supersampling which was an antialiasing measure to make the triangles look less jaggy. Then, I implemented transformations such as translation, rotation, and scaling using matrix multiplications. Barycentric coordinates are used to interpolate colors across a triangle. To implement this, I needed to calculate the color of each vertex and then interpolate the colors of the pixels within the triangle based on their position relative to the vertices. This allowed me to implement smooth changes in color over a triangle. Texture mapping is a technique used to apply a 2D image onto a 3D surface. To implement texture mapping, I mapped the pixels of the texture onto the surface of the 3D model. Mipmaps are precomputed, downsampled versions of a texture that are used to improve the performance and quality of texture mapping. To implement mipmapping, I selected the appropriate level of detail based on the size of the texture on the 3D model. The final color of each pixel would then be calculated based on the selected mipmap level and the corresponding point on the surface of the model with the help of barycentric coordinates.
+</p>
+
+<h2 align="middle">Section I: Rasterization</h2>
+
+<h3 align="middle">Part 1: Rasterizing single-color triangles</h3>
+
+<p>I took the min and max x, y values of vertices to calculate the box where the triangle lies in. I iterated through the box checking whether each pixel is within the triangle using the formula given in lecture. If the pixel was inside the triangle I called the fill_pixel() method to fill in the entire pixel with the given color. 
+  This algorithm only iterates through the box that contains the triangle as I fetched the coordinates of the box by getting the min and max x, y values. And every iteration takes constant time, so it takes at most as the size of the bounding box of the triangle.
+  </p>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/screenshots/1.png" align="middle" width="800px"/>
+        <figcaption align="middle">basic/test4.svg</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<h3 align="middle">Part 2: Antialiasing triangles</h3>
+
+<p>The idea is to subdivide each pixel into smaller units and calculate the color of each unit based on the triangle's vertices. If the subdivided part of the pixel lies within the triangle it is assigned the triangle’s color. The final color of the pixel is then calculated based on the average of all the sampled colors within the pixel.
+  Here's a walkthrough of my supersampling algorithm and data structures:
+</p>
+<p>
+  Data Structures:
+  I used the vector sample_buffer to represent the subpixels. This is essentially a smaller unit of the screen that is used to calculate the color of a single pixel.
+</p>
+<p>
+  Algorithm:
+  To implement supersampling, I modified my existing rasterization algorithm to first subdivide each pixel into a set of supersamples. For each pixel, I divided the pixel equally into sample_rate parts and iterated through these subparts checking if it lied inside the triangle or not and assigned a corresponding color in the sample_buffer. Later when writing to the framebuffer, I averaged the values within pixels.
+</p>
+<p>
+  Supersampling is a technique that can help reduce visual artifacts, such as jagged lines, that can occur during triangle rasterization. By taking multiple samples within each pixel, the resulting image can be more accurate and detailed. In order to implement supersampling, I needed to create a new data structure to represent the supersamples, and modify the existing algorithm to iterate over each supersample to calculate its color. The final step of the algorithm was then updated to average the colors of all the supersamples to obtain the final pixel color.
+  Supersampling helped getting a more accurate representation of images. Some parts inside the triangle that were white were filled with color as it got averaged with the colored parts surrounding it. This reduced jagged edges.
+</p>
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/screenshots/2.png" align="middle" width="400px"/>
+        <figcaption align="middle">sample rate 1</figcaption>
+      </td>
+      <td>
+        <img src="images/screenshots/3.png" align="middle" width="400px"/>
+        <figcaption align="middle">sample rate 4</figcaption>
+      </td>
+    </tr>
+    <br>
+    <tr>
+      <td>
+        <img src="images/screenshots/4.png" align="middle" width="400px"/>
+        <figcaption align="middle">sample rate 16</figcaption>
+      </td>
+     
+    </tr>
+  </table>
+</div>
+
+
+<h3 align="middle">Part 3: Transforms</h3>
+
+<p>This person is waving at the screen.</p>
+
+<div align="middle">
+  <table style="width=100%">
+    <tr>
+      <td>
+        <img src="images/screenshots/5.png" align="middle" width="800px"/>
+        <figcaption align="middle">basic/test4.svg</figcaption>
+      </td>
+    </tr>
+  </table>
+</div>
+
+<h2 align="middle">Section II: Sampling</h2>
+
+<h3 align="middle">Part 4: Barycentric coordinates</h3>
+
+<p>Barycentric coordinates are a way to express a point's position within a triangle by using a set of three weights that indicate the contribution of each vertex to the point's overall location. To calculate barycentric coordinates, one vertex of the triangle is chosen as the reference point, and the area of the triangle formed by the other two vertices and the point is computed. The barycentric coordinate corresponding to the reference vertex is then determined by dividing the area of the triangle formed by the reference vertex and the other two vertices by the total area of the triangle. The same process is then repeated for the other two vertices of the triangle, using the same reference point. This provides a representation of the point as a combination of the triangle's vertices.
+  </p><p>
+  Barycentric coordinates are used for interpolating colors, normals, and other values across a triangle's surface. The weights obtained through barycentric coordinates help determine how much each vertex's contribution influences the final result. The result is a smooth blending of colors and values across the surface of the triangle, which is why barycentric coordinates are so useful for achieving accurate and smooth renderings. In the following image the vertices are each entirely red, green, and blue. The inner points in the triangle have colors that are a combination of those of the vertices. The closer a point is to a vertex, the color get more similar to the vertex.</p>
+
+  <div align="middle">
+    <table style="width=100%">
+      <tr>
+        <td>
+          <img src="images/screenshots/6.png" align="middle" width="400px"/>
+          <figcaption align="middle">triangle with one red, one green, and one blue vertex</figcaption>
+        </td>
+        <td>
+          <img src="images/screenshots/7.png" align="middle" width="400px"/>
+          <figcaption align="middle">svg/basic/test7.svg</figcaption>
+        </td>
+      </tr>
+      <br>
+    </table>
+  </div>
+
+
+<h3 align="middle">Part 5: "Pixel sampling" for texture mapping</h3>
+
+<p>Pixel sampling is a process used in texture mapping to determine the color of a pixel by sampling the texture map at that pixel's location. The texture map is an image that is applied to a surface to provide additional detail and realism. In order to apply the texture map to a surface, we map each vertex of a triangle to a corresponding point on the texture map, and then interpolate the texture coordinates across the surface of the triangle.
+</p>
+<p>
+  To translate from screen space to texture space, I calculated the barycentric weights of the triangles in the screen coordinate system and dotted the weights with the u and v coordinates (texture coordinates) which could be used to get the corresponding texel that was used for sampling.
+</p>
+<p>
+  The two methods for sampling are nearest-neighbor and bilinear. Nearest-neighbor sampling retrieves the color of the closest texel to the desired texture coordinate, while bilinear sampling takes a weighted average of the colors of the four closest texels to the desired texture coordinate. Nearest-neighbor sampling is computationally simple but may produce visual artifacts, while bilinear sampling is more computationally complex but produces smoother and more accurate results.
+  To perform texture mapping using pixel sampling, we retrieve the color of the texture map at the corresponding texture coordinate for each pixel in the triangle, using either nearest-neighbor or bilinear sampling. We then fill in the pixel with the retrieved color.
+</p>
+<p>
+  The bilinear sampling method looks more smooth. This happens when there is an abrupt change in color and when the texture is being magnified or minified, as nearest neighbor sampling can produce visual artifacts such as aliasing in these situations. When magnified or minified, one pixel has to represent multiple texels or a texel is represented by multiple pixels, bilinear sampling relieves the jaggedness that comes from this as it takes texel values from its neighbors according to the proximity, making the image smoother.
+  </p>
+
+  <div align="middle">
+    <table style="width=100%">
+      <tr>
+        <td>
+          <img src="images/screenshots/13.png" align="middle" width="400px"/>
+          <figcaption align="middle">nearest sampling at 1 sample per pixel</figcaption>
+        </td>
+        <td>
+          <img src="images/screenshots/14.png" align="middle" width="400px"/>
+          <figcaption align="middle">snearest sampling at 16 samples per pixel</figcaption>
+        </td>
+      </tr>
+      <br>
+      <tr>
+        <td>
+          <img src="images/screenshots/15.png" align="middle" width="400px"/>
+          <figcaption align="middle">bilinear sampling at 1 sample per pixel</figcaption>
+        </td>
+        <td>
+          <img src="images/screenshots/16.png" align="middle" width="400px"/>
+          <figcaption align="middle">bilinear sampling at 16 samples per pixel</figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+<h3 align="middle">Part 6: "Level sampling" with mipmaps for texture mapping</h3>
+
+<p>Level sampling allows one to choose the right mipmap level so that the texel to pixel ratio is approximately close to 1 to 1. This allows accurate representation of the image. 
+</p>
+<p>
+  Pixel sampling retrieves the texture map color for each pixel, using either nearest-neighbor or bilinear sampling. It is a fast and efficient technique, but can produce visual artifacts due to the limited number of samples per pixel.
+</p>
+<p>
+  Level sampling with mipmaps improves visual quality and reduces aliasing by selecting the appropriate level of detail for the current distance. However, it can be computationally expensive due to the need to compute and store multiple versions of the texture map.
+  Increasing the number of samples per pixel involves taking multiple samples within each pixel to improve antialiasing and produce smoother and more accurate color values. This technique can improve visual quality and reduce aliasing but is computationally expensive and memory-intensive due to the need to store and process a larger number of samples per pixel.
+  </p>
+
+  <div align="middle">
+    <table style="width=100%">
+      <tr>
+        <td>
+          <img src="images/screenshots/8.png" align="middle" width="400px"/>
+          <figcaption align="middle"> L_ZERO and P_NEAREST</figcaption>
+        </td>
+        <td>
+          <img src="images/screenshots/9.png" align="middle" width="400px"/>
+          <figcaption align="middle"> L_ZERO and P_LINEAR</figcaption>
+        </td>
+      </tr>
+      <br>
+      <tr>
+        <td>
+          <img src="images/screenshots/10.png" align="middle" width="400px"/>
+          <figcaption align="middle"> L_NEAREST and P_NEAREST</figcaption>
+        </td>
+        <td>
+          <img src="images/screenshots/11.png" align="middle" width="400px"/>
+          <figcaption align="middle">L_NEAREST and P_LINEAR</figcaption>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+
+<h2 align="middle">Section III: Art Competition</h2>
+<p>If you are not participating in the optional art competition, don't worry about this section!</p>
+
+<h3 align="middle">Part 7: Draw something interesting!</h3>
+
+</body>
+</html>
